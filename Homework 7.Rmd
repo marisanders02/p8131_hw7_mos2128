@@ -1,0 +1,68 @@
+---
+title: "Homework 7"
+author: "Mari Sanders"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(nlme)
+library(lme4)
+data <- read_csv("HW7-politeness_data.csv")
+```
+
+# Problem 1 
+
+## (a)
+
+```{r}
+data %>% ggplot(aes(x = gender, y = frequency)) + 
+  geom_boxplot()
+
+
+data %>% 
+  group_by(gender) %>% 
+  summarize(median = median(frequency))
+
+```
+
+It seems that males have a lower frequency than females, with a median of 127 for males and a median of 249 for females. 
+
+```{r}
+data %>% ggplot(aes(x = attitude, y = frequency )) + 
+  geom_boxplot()
+
+data %>% 
+  group_by(attitude) %>% 
+  summarize(median = median(frequency))
+```
+
+It seems that the inf attitude has a slightly higher median frequency at 209, compared to pol attitude with a median frequency of 189. 
+
+## (b)
+
+```{r}
+LMM1 <- lme(frequency ~ gender + attitude, random = ~1 | subject,  data = data, method='REML')
+
+summary(LMM1)
+
+vcov(LMM1)
+
+ranef(model)
+```
+
+## (c)
+
+```{r}
+LMM2 <- lme(frequency ~ gender + attitude + gender*attitude, random = ~1 | subject,  data = data, method='REML')
+
+summary(LMM2)
+
+LMM1.comp <- lme(frequency ~ gender + attitude, random = ~1 | subject,  data = data, method='ML') 
+LMM2.comp <- lme(frequency ~ gender + attitude + gender*attitude, random = ~1 | subject,  data = data, method='ML')
+anova(LMM2.comp,LMM1.comp) 
+```
+
+## (d)
