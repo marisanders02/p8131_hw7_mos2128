@@ -10,7 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(nlme)
 library(lme4)
-data <- read_csv("HW7-politeness_data.csv")
+data <- read_csv("HW7-politeness_data.csv") 
 ```
 
 # Problem 1 
@@ -19,38 +19,80 @@ data <- read_csv("HW7-politeness_data.csv")
 
 ```{r}
 data %>% ggplot(aes(x = gender, y = frequency)) + 
-  geom_boxplot()
-
+  geom_boxplot() + facet_wrap(~attitude)
 
 data %>% 
-  group_by(gender) %>% 
+  group_by(gender, attitude) %>% 
   summarize(median = median(frequency))
 
 ```
 
-It seems that males have a lower frequency than females, with a median of 127 for males and a median of 249 for females. 
-
-```{r}
-data %>% ggplot(aes(x = attitude, y = frequency )) + 
-  geom_boxplot()
-
-data %>% 
-  group_by(attitude) %>% 
-  summarize(median = median(frequency))
-```
-
-It seems that the inf attitude has a slightly higher median frequency at 209, compared to pol attitude with a median frequency of 189. 
+In general, males have a lower frequency than females. 
 
 ## (b)
 
+### Model 
 ```{r}
 LMM1 <- lme(frequency ~ gender + attitude, random = ~1 | subject,  data = data, method='REML')
 
 summary(LMM1)
 
-vcov(LMM1)
+```
 
-ranef(model)
+### Covariance Matrix Structure Individual Participant
+
+```{r}
+sigma_u2 <- as.numeric(VarCorr(LMM1)[1, "Variance"])    
+sigma_e2 <- as.numeric(VarCorr(LMM1)[2, "Variance"])   
+
+
+subject_id <- "F1"
+
+n_i <- sum(data$subject == subject_id)
+
+I <- diag(n_i)
+J <- matrix(1, n_i, n_i)
+
+Cov_Yi <- sigma_u2 * J + sigma_e2 * I
+Cov_Yi
+```
+
+Since the covariance of the non diagonal terms are all the same, the covariance structure for an individual participant is compound symmetry. 
+
+### Covariance Structure Fixed Effects 
+
+```{r}
+vcov(LMM1)
+```
+
+### BLUPs
+
+```{r}
+random.effects(LMM1)
+```
+
+### Residuals 
+
+```{r}
+resid_cond <- resid(LMM1, type = "response")
+resid_marg <- resid(LMM1, type = "normalized")  
+data$resid_cond <- resid_cond
+data$resid_marg <- resid_marg
+head(data[, c("subject", "frequency", "resid_cond", "resid_marg")])
+```
+
+```{r}
+ggplot(data, aes(x = subject, y = resid_cond)) +
+  geom_boxplot(fill = "skyblue") +
+  labs(title = "Conditional Residuals by Participant",
+       x = "Participant (subject)", y = "Conditional Residuals") +
+  theme_minimal()
+
+ggplot(data, aes(x = subject, y = resid_marg)) +
+  geom_boxplot(fill = "lightpink") +
+  labs(title = "Marginal Residuals by Participant",
+       x = "Participant (subject)", y = "Marginal Residuals") +
+  theme_minimal()
 ```
 
 ## (c)
@@ -65,4 +107,33 @@ LMM2.comp <- lme(frequency ~ gender + attitude + gender*attitude, random = ~1 | 
 anova(LMM2.comp,LMM1.comp) 
 ```
 
+Since the p-value is 0.2392, we fail to reject the null hypothesis and say that the simpler model is better. 
+
 ## (d)
+
+```{r}
+LMM3 <- lmer(frequency ~ gender + attitude + (1 | subject) + (1 | scenario), data = data)
+
+summary(LMM3)
+
+```
+
+## Covariance Matrix for an Individual Participant
+
+```{r}
+id <- "F1"
+df_i <- data[data$subject == id, ]
+n_i <- nrow(df_i)
+vc <- as.data.frame(VarCorr(LMM3))
+sigma_subject <- vc$vcov[vc$grp == "subject"]
+sigma_scenario <- vc$vcov[vc$grp == "scenario"]
+sigma_resid <- sigma(LMM3)^2
+I <- diag(n_i)
+J <- matrix(1, n_i, n_i)
+scenario_vec <- df_i$scenario
+B <- outer(scenario_vec, scenario_vec, FUN = Vectorize(function(a, b) as.numeric(a == b)))
+Cov_Yi <- sigma_subject * J + sigma_scenario * B + sigma_resid * I
+Cov_Yi
+```
+
+Formal speech is associated with pitch that is 20 Hz lower on average than informal speech, when adjusting for gender and random effects. 
